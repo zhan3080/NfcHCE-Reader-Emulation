@@ -62,6 +62,12 @@ public class CardService extends HostApduService {
     private static final byte[] SELECT_APDU = BuildSelectApdu(SAMPLE_LOYALTY_CARD_AID);
     private static final byte[] GET_DATA_APDU = BuildGetDataApdu();
 
+    private static final String WRITE_DATA_APDU_HEADER = "00DA0000";
+    private static final String READ_DATA_APDU_HEADER = "00EA0000";
+    private static final byte[] WRITE_DATA_APDU = BuildWriteDataApdu();
+    private static final byte[] READ_DATA_APDU = BuildReadDataApdu();
+    private static String dataStr = null;
+
     /*File IO Stuffs*/
     File sdcard = Environment.getExternalStorageDirectory();
     File file = new File(sdcard,"file.txt");
@@ -101,10 +107,16 @@ public class CardService extends HostApduService {
     @Override
     public byte[] processCommandApdu(byte[] commandApdu, Bundle extras) {
         Log.i(TAG, "Received APDU: " + ByteArrayToHexString(commandApdu));
+        byte[] cmd = null;
+        //length 6 is define by WRITE_DATA_APDU from read and emulatior
+        //长度由reader端及卡端的命令WRITE_DATA_APDU来协商的
+        if(commandApdu.length >= 6){
+            cmd = Arrays.copyOf(commandApdu,6);
+        }
         // If the APDU matches the SELECT AID command for this service,
         // send the loyalty card account number, followed by a SELECT_OK status trailer (0x9000).
         if (Arrays.equals(SELECT_APDU, commandApdu)) {
-            String account = "some string random data some string random data some string random data some string random data some string random data some string random data some string random data some string random data some string data some string random data some string";
+            String account = "some string random data";
             byte[] accountBytes = account.getBytes();
             Log.i(TAG, "Sending account number: " + account);
             readFromFile();
@@ -120,9 +132,31 @@ public class CardService extends HostApduService {
             pointer += 200;byte[] accountBytes = stringToSend.getBytes();
             Log.i(TAG, "Sending substring, pointer : " + pointer + " , " + stringToSend);
             return ConcatArrays(accountBytes, SELECT_OK_SW);
-        }
-
-        else {
+        } else if (cmd != null && Arrays.equals(WRITE_DATA_APDU, cmd)){
+            //length 6 is define by WRITE_DATA_APDU from read and emulatior
+            //长度由reader端及卡端的命令WRITE_DATA_APDU来协商的
+            byte[] data = Arrays.copyOfRange(commandApdu,6,commandApdu.length);
+            try {
+                dataStr = new String(data, "UTF-8");
+                Log.i(TAG, "dataStr:" + dataStr);
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+            String account = "write success";
+            byte[] accountBytes = account.getBytes();
+            Log.i(TAG, "Sending account number: " + account);
+            return ConcatArrays(accountBytes, SELECT_OK_SW);
+        } else if (Arrays.equals(READ_DATA_APDU, cmd)){
+            if(dataStr!=null) {
+                byte[] accountBytes = dataStr.getBytes();
+                Log.i(TAG, "Sending account number: " + dataStr);
+                return ConcatArrays(accountBytes, SELECT_OK_SW);
+            }else {
+                byte[] accountBytes = "data error".getBytes();
+                Log.i(TAG, "Sending account number: " + dataStr);
+                return ConcatArrays(accountBytes, SELECT_OK_SW);
+            }
+        } else {
                 return UNKNOWN_CMD_SW;
 
         }
@@ -225,9 +259,21 @@ public class CardService extends HostApduService {
 //        catch (IOException e) {
 //            e.printStackTrace();
 //        }
-        text.append("test1");
-        text.append("test2");
-        text.append("test3");
-        text.append('\n');
+        text.append("some string random data some string random data some string random data some string random data some string random data \n");
+        text.append("some string random data some string random data some string random data some string random data some string random data \n");
+        text.append("some string random data some string random data some string random data some string random data some string random data \n");
+        text.append("some string random data some string random data some string random data some string random data some string random data \n");
+        text.append("some string random data some string random data some string random data some string random data some string random data \n");
+        text.append("some string random data some string random data some string random data some string random data some string random data \n");
     }
+
+    public static byte[] BuildWriteDataApdu() {
+        // Format: [CLASS | INSTRUCTION | PARAMETER 1 | PARAMETER 2 | LENGTH | DATA]
+        return HexStringToByteArray(WRITE_DATA_APDU_HEADER + "0FFF");
+    }
+    public static byte[] BuildReadDataApdu() {
+        // Format: [CLASS | INSTRUCTION | PARAMETER 1 | PARAMETER 2 | LENGTH | DATA]
+        return HexStringToByteArray(READ_DATA_APDU_HEADER + "0FFF");
+    }
+
 }

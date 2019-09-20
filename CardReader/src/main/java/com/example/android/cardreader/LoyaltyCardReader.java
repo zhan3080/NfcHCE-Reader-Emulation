@@ -30,7 +30,7 @@ import java.util.Arrays;
 
 /**
  * Callback class, invoked when an NFC card is scanned while the device is running in reader mode.
- *
+ * <p>
  * Reader mode can be invoked by calling NfcAdapter
  */
 public class LoyaltyCardReader implements NfcAdapter.ReaderCallback {
@@ -45,9 +45,11 @@ public class LoyaltyCardReader implements NfcAdapter.ReaderCallback {
     // "OK" status word sent in response to SELECT AID command (0x9000)
     private static final byte[] SELECT_OK_SW = {(byte) 0x90, (byte) 0x00};
 
-    String gotData = "", finalGotData = "";
 
-    long timeTaken = 0;
+    private static final String WRITE_DATA_APDU_HEADER = "00DA0000";
+    private static final String READ_DATA_APDU_HEADER = "00EA0000";
+    private static final byte[] WRITE_DATA_APDU = BuildWriteDataApdu();
+    private static final byte[] READ_DATA_APDU = BuildReadDataApdu();
 
     // Weak reference to prevent retain loop. mAccountCallback is responsible for exiting
     // foreground mode before it becomes invalid (e.g. during onPause() or onStop()).
@@ -97,50 +99,20 @@ public class LoyaltyCardReader implements NfcAdapter.ReaderCallback {
                 // bytes of the result) by convention. Everything before the status word is
                 // optional payload, which is used here to hold the account number.
                 int resultLength = result.length;
-                byte[] statusWord = {result[resultLength-2], result[resultLength-1]};
-                byte[] payload = Arrays.copyOf(result, resultLength-2);
+                byte[] statusWord = {result[resultLength - 2], result[resultLength - 1]};
+                byte[] payload = Arrays.copyOf(result, resultLength - 2);
                 if (Arrays.equals(SELECT_OK_SW, statusWord)) {
-                    // The remote NFC device will immediately respond with its stored account number
                     String accountNumber = new String(payload, "UTF-8");
                     Log.i(TAG, "Received: " + accountNumber);
-                    // Inform CardReaderFragment of received account number
-                    if (true) {
-                        timeTaken = System.currentTimeMillis();
-                        while (!(gotData.contains("END"))) {
-                            byte[] getCommand = BuildGetDataApdu();
-                            Log.i(TAG, "Sending: " + ByteArrayToHexString(getCommand));
-                            result = isoDep.transceive(getCommand);
-                            resultLength = result.length;
-                            Log.i(TAG, "Received length : " + resultLength);
-                            byte[] statusWordNew = {result[resultLength - 2], result[resultLength - 1]};
-                            payload = Arrays.copyOf(result, resultLength - 2);
-                            if (Arrays.equals(SELECT_OK_SW, statusWordNew)) {
-                                gotData = new String(payload, "UTF-8");
-                                Log.i(TAG, "Received: " + gotData);
-                                finalGotData = finalGotData + gotData;
-                                Log.i(TAG, "Data transferred : " + finalGotData.length());
-                                Log.i(TAG, "Time taken: " + (System.currentTimeMillis() - timeTaken));
-
-                            }
-                        }
-                        mAccountCallback.get().onAccountReceived(gotData);
-
-                    }
-                    //mAccountCallback.get().onAccountReceived(accountNumber);
-
-                    /*String seedVal = "PRESHAREDKEY";
-                    String decodedString = null;
-                    try {
-                        decodedString = AESHelper.decrypt(seedVal, accountNumber);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        Log.e("ARNAV", "failed to decrypt");
-                        decodedString = accountNumber;
-                    }*/
+                    //todo test sample
+                    setAPDUMsg(isoDep,"test");
+                    getAPDUMsg(isoDep);
                 }
+
             } catch (IOException e) {
                 Log.e(TAG, "Error communicating with card: " + e.toString());
             }
+
         }
     }
 
@@ -173,10 +145,10 @@ public class LoyaltyCardReader implements NfcAdapter.ReaderCallback {
      * @return String, containing hexadecimal representation.
      */
     public static String ByteArrayToHexString(byte[] bytes) {
-        final char[] hexArray = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+        final char[] hexArray = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
         char[] hexChars = new char[bytes.length * 2];
         int v;
-        for ( int j = 0; j < bytes.length; j++ ) {
+        for (int j = 0; j < bytes.length; j++) {
             v = bytes[j] & 0xFF;
             hexChars[j * 2] = hexArray[v >>> 4];
             hexChars[j * 2 + 1] = hexArray[v & 0x0F];
@@ -197,9 +169,80 @@ public class LoyaltyCardReader implements NfcAdapter.ReaderCallback {
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
             data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
-                    + Character.digit(s.charAt(i+1), 16));
+                    + Character.digit(s.charAt(i + 1), 16));
         }
         return data;
+    }
+
+    public static byte[] BuildWriteDataApdu() {
+        // Format: [CLASS | INSTRUCTION | PARAMETER 1 | PARAMETER 2 | LENGTH | DATA]
+        return HexStringToByteArray(WRITE_DATA_APDU_HEADER + "0FFF");
+    }
+
+    public static byte[] BuildReadDataApdu() {
+        // Format: [CLASS | INSTRUCTION | PARAMETER 1 | PARAMETER 2 | LENGTH | DATA]
+        return HexStringToByteArray(READ_DATA_APDU_HEADER + "0FFF");
+    }
+
+    public static byte[] ConcatArrays(byte[] first, byte[]... rest) {
+        int totalLength = first.length;
+        for (byte[] array : rest) {
+            totalLength += array.length;
+        }
+        byte[] result = Arrays.copyOf(first, totalLength);
+        int offset = first.length;
+        for (byte[] array : rest) {
+            System.arraycopy(array, 0, result, offset, array.length);
+            offset += array.length;
+        }
+        return result;
+    }
+
+    private String getAPDUMsg(IsoDep isoDep) {
+        if (isoDep == null) {
+            return "";
+        }
+        String msg = null;
+        try {
+            Log.i(TAG, "Sending: " + ByteArrayToHexString(READ_DATA_APDU));
+            byte[] result = isoDep.transceive(READ_DATA_APDU);
+            int resultLength = result.length;
+            byte[] statusWord = {result[resultLength - 2], result[resultLength - 1]};
+            byte[] payload = Arrays.copyOf(result, resultLength - 2);
+            if (Arrays.equals(SELECT_OK_SW, statusWord)) {
+                msg = new String(payload, "UTF-8");
+                Log.i(TAG, "Received msg: " + msg);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getAPDUMsg Exception:" + e);
+        }
+        return msg;
+    }
+
+    private void setAPDUMsg(IsoDep isoDep, String msg) {
+        if (isoDep == null) {
+            return;
+        }
+
+        try {
+            Log.i(TAG, "write: " + WRITE_DATA_APDU_HEADER);
+            byte[] selCommand = ConcatArrays(WRITE_DATA_APDU, msg.getBytes());
+            Log.i(TAG, "Sending: " + ByteArrayToHexString(selCommand));
+            byte[] result = isoDep.transceive(selCommand);
+            int resultLength = result.length;
+            byte[] statusWord = {result[resultLength - 2], result[resultLength - 1]};
+            byte[] payload1 = Arrays.copyOf(result, resultLength - 2);
+            if (Arrays.equals(SELECT_OK_SW, statusWord)) {
+                // The remote NFC device will immediately respond with its stored account number
+                String accountNumber = new String(payload1, "UTF-8");
+                Log.i(TAG, "Received payload: " + accountNumber);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "setAPDUMsg Exception:" + e);
+        }
+
+
+        return;
     }
 
 }
