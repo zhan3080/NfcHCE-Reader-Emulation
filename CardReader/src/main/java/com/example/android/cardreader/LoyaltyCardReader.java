@@ -18,10 +18,7 @@ package com.example.android.cardreader;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.nfc.tech.IsoDep;
-import android.os.SystemClock;
-import android.widget.Toast;
 
-import com.example.android.common.AESHelper;
 import com.example.android.common.logger.Log;
 
 import java.io.IOException;
@@ -115,6 +112,8 @@ public class LoyaltyCardReader implements NfcAdapter.ReaderCallback {
 
         }
     }
+
+
 
     /**
      * Build APDU for SELECT AID command. This command indicates which service a reader is

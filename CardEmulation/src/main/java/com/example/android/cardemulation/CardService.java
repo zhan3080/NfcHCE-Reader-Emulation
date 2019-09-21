@@ -16,7 +16,6 @@
 
 package com.example.android.cardemulation;
 
-import android.content.Intent;
 import android.nfc.cardemulation.HostApduService;
 import android.os.Bundle;
 import android.os.Environment;
@@ -24,10 +23,7 @@ import android.widget.Toast;
 
 import com.example.android.common.logger.Log;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.Arrays;
 
 /**
@@ -223,6 +219,7 @@ public class CardService extends HostApduService {
             data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
                     + Character.digit(s.charAt(i+1), 16));
         }
+        Log.i(TAG,"DATA " + data[0] + " ," +data[1]);
         return data;
     }
 
