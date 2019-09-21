@@ -118,7 +118,7 @@ public class MainActivity extends Activity {
             // 检验响应数据
             if (Arrays.equals(SELECT_OK, statusWord)) {
                 String accountNumber = new String(payload, "UTF-8");
-                Log.e(TAG, "----> " + accountNumber);
+                Log.i(TAG, "----> " + accountNumber);
                 mTvView.setText(accountNumber);
             } else {
                 String info = bytesToString(result);
